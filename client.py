@@ -1,4 +1,3 @@
-#!/usr/bin/env python
 # -*- coding: utf-8 -*-
 from __future__ import division, print_function
 
@@ -51,40 +50,31 @@ def gen_payload( args ):
         data = f.read()
     return data
 
-def loop( sock ):
-    sock.settimeout(1e-2)
-    while True:
-        try:
-            d = sock.recv(10, socket.MSG_WAITALL).strip()
-            if len(d) > 0:
-                print(d)
-        except socket.timeout as e:
-            print( '.', end='' )
-            sys.stdout.flush()
+def get_n_bytes(conn, n):
+    data = b''
+    while len(data) < n:
+        data += conn.recv(n-len(data), socket.MSG_WAITALL)
+    return data
 
 def read_msg(conn):
-    d = conn.recv(1024, socket.MSG_WAITALL)
-    return d.decode('utf-8').strip()
+    # first get the first 10 byes
+    nBytes = get_n_bytes(conn, 10)
+    nBytes = int(nBytes)
+    data = get_n_bytes(conn, nBytes)
+    return data 
 
 def save_bz2(conn, outfile):
     # first 6 bytes always tell how much to read next. Make sure the submit job
     # script has it
-    d = conn.recv(10, socket.MSG_WAITALL)
-    while len(d) < 10:
-        try:
-            d = conn.recv(10, socket.MSG_WAITALL)
-        except Exception as e:
-            print( "[ERROR] Error in format. First 6 bytes are size of msg." )
-            continue
-
+    d = get_n_bytes(conn, 10)
+    if len(d) < 10:
+        print( "[ERROR] Error in format. First 10 bytes are size of msg." )
+        return 
     d = int(d)
-    print( "Needs to get %s bytes" % d, end = ' ')
-    data = b''
-    while len(data) < d:
-        data += conn.recv(d - len(data), socket.MSG_WAITALL)
-    print( ' ... got %d bytes.' % len(data) )
+    data = get_n_bytes(conn, d)
     with open(outfile, 'wb') as f:
         f.write(data)
+    print( "[INFO ] Got total %d bytes." % len(data) )
     return data
 
 def main( args ):
@@ -108,13 +98,14 @@ def main( args ):
     write_data_to_socket(sock, data)
     print( '   [SENT]' )
     while True:
+        d = b''
         try:
             d = read_msg( sock )
-            print( d )
-            if '>DONE SIMULATION' in d:
-                break
         except socket.timeout as e:
             time.sleep(0.5)
+
+        if b'>DONE SIMULATION' in d:
+            break
 
     outfile = os.path.join(tempfile.mkdtemp(), 'res.tar.bz2')
     data = save_bz2(sock, outfile)

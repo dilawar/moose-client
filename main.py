@@ -1,5 +1,5 @@
 """main.py: 
-Python3 UI.
+Python UI.
 """
     
 __author__           = "Dilawar Singh"
@@ -21,9 +21,9 @@ import glob
 import helper
 import time
 
-try:
+if sys.version_info[0] >= 3:  
     import tkinter as TK
-except ImportError as e:
+else:
     import Tkinter as TK
 
 if sys.version_info[0] >= 3:  
@@ -44,7 +44,7 @@ layout = [
         , [sg.Text('Other files'), sg.Input(key='other_files'), sg.FilesBrowse()]
         , [sg.Canvas(size=(w_,h_), key='canvas')]
         # Output size is in chars x line 
-        , [sg.Output(key='output', size=(80,10))]
+        #, [sg.Output(key='output', size=(80,10))]
         , [sg.Submit(), sg.Exit()]
         ]
 
@@ -73,14 +73,17 @@ def display_results(bzfile, window):
 def main(args):
     global sdir_
     window = sg.Window('MOOSE').Layout(layout).Finalize()
+
     if args['server']:
         window.FindElement('server').Update(args['server'])
     if args['input']:
         window.FindElement('main_file').Update(args['input'])
+
     draw_canvas( window.FindElement('canvas' )
             , PIL.Image.open(os.path.join(sdir_, './assests/moose_icon_large.png'))
             )
-    while True:                 # Event Loop  
+
+    while True:
         event, values = window.Read()  
         print(event, values)
         if event is None or event == 'Exit':  
