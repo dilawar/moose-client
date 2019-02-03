@@ -13,7 +13,14 @@ import sys
 import os
 import re
 import socket
-import tkinter as TK
+import PIL.ImageTk 
+import PIL.Image
+
+try:
+    import tkinter as TK
+except ImportError as e:
+    import Tkinter as TK
+
 if sys.version_info[0] >= 3:  
     import PySimpleGUI as sg  
 else:  
@@ -22,24 +29,25 @@ else:
 sdir_ = os.path.dirname( __file__ )
 w_, h_ = 400, 300
 
-layout = [      
-        [sg.Text('MOOSE Server')],      
-        [sg.Text('Server Adress', size=(15,1)), sg.InputText('ghevar.ncbs.res.in:31417')],      
-        [sg.Text('Main file'), sg.Input(), sg.FileBrowse()],
-        [sg.Text('Other files'), sg.Input(), sg.FilesBrowse()],
-        [sg.Canvas(size=(w_,h_), key='canvas')],
-        [sg.Output(key='output') ],
-        [sg.Submit(), sg.Exit()]      
+# need a global because we don't want img_ to be garbage collected.
+img_   = None
+
+layout = [ 
+        [sg.Text('Server Adress', size=(15,1))
+            , sg.InputText('ghevar.ncbs.res.in:31417', key='server')]
+        , [sg.Text('Main file'), sg.Input(key='main_file'), sg.FileBrowse()]
+        , [sg.Text('Other files'), sg.Input(key='other_files'), sg.FilesBrowse()]
+        , [sg.Canvas(size=(w_,h_), key='canvas')]
+        # Output size is in chars x line 
+        , [sg.Output(key='output', size=(80,4))]
+        , [sg.Submit(), sg.Exit()]
         ]
 
-def draw_canvas( canvas, fig ):
-    #  tkCanvas.create_oval(50, 50, 100, 100)
-    #  photo = tkinter.PhotoImage( file=fig, width=800, height=500 )
-    #  print( photo.width(), photo.height() )
-    photo = TK.PhotoImage(file=fig, width=500, height=500)
-    image = canvas.TKCanvas.create_image(100, 100, anchor=TK.NW ,image=photo)
-    #  image.pack()
-    #  tkCanvas.create_image(0, 0, image=img, anchor=tkinter.NW)
+def draw_canvas( canvas, imgpath ):
+    global img_
+    global w_, h_
+    img_ = PIL.ImageTk.PhotoImage(PIL.Image.open(imgpath).resize((w_,h_)))
+    canvas.TKCanvas.create_image(0, 0, anchor=TK.NW ,image=img_)
 
 def main():
     window = sg.Window('MOOSE').Layout(layout).Finalize()
@@ -47,16 +55,16 @@ def main():
             , os.path.join(sdir_, './assests/moose_icon_large.png' )
             )
     while True:                 # Event Loop  
-      event, values = window.Read()  
-      print(event, values)
-      if event is None or event == 'Exit':  
-          break  
-      if event == 'Submit':  
-          # change the "output" element to be the value of "input" element  
-          #  window.FindElement('_OUTPUT_').Update(values['_IN_'])
-          pass
-      else:
-          print( 'Unsupported event' )
+        event, values = window.Read()  
+        print(event, values)
+        if event is None or event == 'Exit':  
+            break  
+        if event == 'Submit':  
+            pass
+        else:
+            print( 'Unsupported event' )
+        for x in ['server', 'main_file', 'other_files']:
+            window.FindElement(x).Update(values.get(x,''))
     window.Close()
 
 if __name__ == '__main__':
