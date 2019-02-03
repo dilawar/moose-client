@@ -19,6 +19,7 @@ import client
 import tarfile
 import glob
 import helper
+import time
 
 try:
     import tkinter as TK
@@ -43,32 +44,41 @@ layout = [
         , [sg.Text('Other files'), sg.Input(key='other_files'), sg.FilesBrowse()]
         , [sg.Canvas(size=(w_,h_), key='canvas')]
         # Output size is in chars x line 
-        #  , [sg.Output(key='output', size=(80,10))]
+        , [sg.Output(key='output', size=(80,10))]
         , [sg.Submit(), sg.Exit()]
         ]
 
-def draw_canvas(canvas, imgpath):
+def draw_canvas(canvas, imgs):
     global img_
     global w_, h_
-    img_ = PIL.ImageTk.PhotoImage(PIL.Image.open(imgpath).resize((w_,h_)))
-    canvas.TKCanvas.create_image(0, 0, anchor=TK.NW ,image=img_)
+    if not isinstance(imgs, list):
+        imgs = [ imgs ]
+    for img in imgs:
+        img_ = PIL.ImageTk.PhotoImage(img.resize((w_,h_)))
+        canvas.TKCanvas.create_image(0, 0, anchor=TK.NW ,image=img_)
+        time.sleep(1)
 
 def display_results(bzfile, window):
     cwd = os.path.dirname(bzfile)
     print( "[INFO ] Result are saved to %s" % bzfile )
     with tarfile.open(bzfile, 'r') as f:
         f.extractall(path=cwd)
-    toShow = helper.find_images(cwd)
-    draw_canvas(window.FindElement('canvas'), toShow[0])
+    images = helper.find_images_pil(cwd)
+    if len(images) > 0:
+        draw_canvas(window.FindElement('canvas'), images)
+    else:
+        print( "[INFO ] No images were returned by the server." )
+        
 
 def main(args):
+    global sdir_
     window = sg.Window('MOOSE').Layout(layout).Finalize()
     if args['server']:
         window.FindElement('server').Update(args['server'])
     if args['input']:
         window.FindElement('main_file').Update(args['input'])
     draw_canvas( window.FindElement('canvas' )
-            , os.path.join(sdir_, './assests/moose_icon_large.png' )
+            , PIL.Image.open(os.path.join(sdir_, './assests/moose_icon_large.png'))
             )
     while True:                 # Event Loop  
         event, values = window.Read()  

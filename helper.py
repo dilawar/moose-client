@@ -10,12 +10,13 @@ __status__           = "Development"
 import sys
 import os
 import mimetypes
+import PIL.Image
 import subprocess32 as subprocess
 
 def run(cmd):
     subprocess.run(cmd.split())
 
-def find_images(dirname):
+def find_images_pil(dirname):
     """find_images
     Find images which can be displayed.
 
@@ -29,12 +30,15 @@ def find_images(dirname):
             if not mType:
                 continue
             appType = mType.split('/')[-1]
-            if appType in ['png', 'jpg', 'jpeg']:
-                res.append(fpath)
+            try:
+                im = PIL.Image.open(fpath)
+                res.append(im)
+            except Exception as e:
+                pass
     return res
 
 def test():
-    find_images( sys.argv[1] )
+    find_images_pil( sys.argv[1] )
 
 if __name__ == '__main__':
     test()
