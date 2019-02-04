@@ -1,6 +1,5 @@
-"""main.py: 
-Python UI.
-"""
+# -*- coding: utf-8 -*-
+from __future__ import division, print_function
     
 __author__           = "Dilawar Singh"
 __copyright__        = "Copyright 2017-, Dilawar Singh"
@@ -20,6 +19,7 @@ import tarfile
 import glob
 import helper
 import time
+import screeninfo
 
 if sys.version_info[0] >= 3:  
     import tkinter as TK
@@ -32,7 +32,14 @@ else:
     import PySimpleGUI27 as sg  
 
 sdir_ = os.path.dirname( __file__ )
-w_, h_ = 400, 300
+
+# set resolution.
+try:
+    from screeninfo import get_monitors
+    m = get_monitors()[0]
+    w_, h_ = int(m.width//1.5), int(m.height//1.5)
+except Exception as e:
+    w_, h_ = 1200, 900
 
 # need a global because we don't want img_ to be garbage collected.
 img_   = None
@@ -72,7 +79,9 @@ def display_results(bzfile, window):
 
 def main(args):
     global sdir_
+    global h_, w_
     window = sg.Window('MOOSE').Layout(layout).Finalize()
+    print( dir(window) )
 
     if args['server']:
         window.FindElement('server').Update(args['server'])

@@ -1,3 +1,4 @@
 subprocess32
 pysimplegui
 pillow
+screeninfo
