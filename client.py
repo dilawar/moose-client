@@ -15,6 +15,7 @@ import time
 import tarfile
 import tempfile
 import argparse
+from helper import log
 
 def gen_prefix( msg, maxlength = 10 ):
     msg = '>%s' % msg
@@ -82,21 +83,20 @@ def main( args ):
     try:
         host, port = args['server'].split(':')
         sock.connect( (host, int(port)) )
-        sock.settimeout(1)
     except Exception as e:
         print( "[ERROR] Failed to connect to %s. Error %s "%(args['server'],e))
         return None
 
+    sock.settimeout(1)
     data = None
     try:
         data = gen_payload( args )
     except Exception as e:
-        print( "[ERROR] Failed to generate payload. Error: %s"%e)
+        log( "[ERROR] Failed to generate payload. Error: %s"%e)
         return None
 
-    print( "[INFO ] Total data to send : %d bytes " % len(data), end = '')
     write_data_to_socket(sock, data)
-    print( '   [SENT]' )
+    log( "[INFO ] Total data sent : %d bytes " % len(data) )
     while True:
         d = b''
         try:

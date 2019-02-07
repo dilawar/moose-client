@@ -12,9 +12,14 @@ import os
 import mimetypes
 import PIL.Image
 import subprocess32 as subprocess
+import datetime
 
 def run(cmd):
     subprocess.run(cmd.split())
+
+def log( *msg ):
+    stamp = datetime.datetime.now().isoformat()
+    print( '%s: %s' % (stamp, *msg))
 
 def find_images_pil(dirname):
     """find_images
