@@ -53,7 +53,7 @@ layout = [
         , [sg.Text('Other files'), sg.Input(key='other_files'), sg.FilesBrowse()]
         , [sg.Canvas(size=(w_,h_), key='canvas')]
         # Output size is in chars x line 
-        , [sg.Output(key='output', size=(120,8))]
+        #, [sg.Output(key='output', size=(120,8))]
         , [sg.Submit(), sg.Exit()]
         ]
 

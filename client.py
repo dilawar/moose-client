@@ -97,6 +97,8 @@ def main( args ):
 
     write_data_to_socket(sock, data)
     log( "[INFO ] Total data sent : %d bytes " % len(data) )
+
+    # This is response from the server.
     while True:
         d = b''
         try:
@@ -104,6 +106,7 @@ def main( args ):
         except socket.timeout as e:
             time.sleep(0.5)
 
+        print('%s' % str(d))
         if b'>DONE SIMULATION' in d:
             break
 
