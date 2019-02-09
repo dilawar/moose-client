@@ -12,19 +12,26 @@ import sys
 import os
 import socket
 import time
+import math
 import tarfile
 import tempfile
 import argparse
 from helper import log
 
-def gen_prefix( msg, maxlength = 10 ):
+# MOOSE uses first 9 bytes to encode the length of message.
+prefixL_ = 9
+
+def gen_prefix(msg, maxlength=9):
     msg = '>%s' % msg
     if len(msg) < maxlength:
         msg += ' ' * (maxlength - len(msg))
     return msg[:maxlength].encode( 'utf-8' )
 
 def write_data_to_socket(conn, msg):
-    msg = b'%010d%s' % (len(msg), msg)
+    global prefixL_
+    prefix = b'0'*(prefixL_- int(math.log10(len(msg)))-1) + b'%d' % len(msg)
+    assert len(prefix) == prefixL_
+    msg = b'%s%s' % (prefix, msg)
     conn.sendall(msg)
 
 def gen_payload( args ):
@@ -58,18 +65,19 @@ def get_n_bytes(conn, n):
     return data
 
 def read_msg(conn):
-    # first get the first 10 byes
-    nBytes = get_n_bytes(conn, 10)
+    global prefixL_
+    # first get the first 9 byes
+    nBytes = get_n_bytes(conn, prefixL_)
     nBytes = int(nBytes)
     data = get_n_bytes(conn, nBytes)
     return data 
 
 def save_bz2(conn, outfile):
-    # first 6 bytes always tell how much to read next. Make sure the submit job
+    # first 9 bytes always tell how much to read next. Make sure the submit job
     # script has it
-    d = get_n_bytes(conn, 10)
-    if len(d) < 10:
-        print( "[ERROR] Error in format. First 10 bytes are size of msg." )
+    d = get_n_bytes(conn, prefixL_)
+    if len(d) < prefixL_:
+        print( "[ERROR] Format. First %s bytes are size of msg."%prefixL_)
         return 
     d = int(d)
     data = get_n_bytes(conn, d)
@@ -104,9 +112,10 @@ def main( args ):
         try:
             d = read_msg( sock )
         except socket.timeout as e:
-            time.sleep(0.5)
+            time.sleep(0.1)
 
-        print('%s' % str(d))
+        if len(d) > 0:
+            print('%s' % str(d))
         if b'>DONE SIMULATION' in d:
             break
 
