@@ -8,15 +8,16 @@ __maintainer__       = "Dilawar Singh"
 __email__            = "dilawars@ncbs.res.in"
 __status__           = "Development"
 
-import sys
 import os
+import pathlib
 import socket
 import time
 import math
 import tarfile
 import tempfile
 import argparse
-from helper import log
+import streamer_utils as su
+from config import log
 
 # MOOSE uses first 9 bytes to encode the length of message.
 prefixL_ = 9
@@ -38,21 +39,22 @@ def gen_payload( args ):
     path = args['main_file']
     if not path:
         raise RuntimeError( 'No input fie' )
-    if not os.path.isfile(path):
+    if not pathlib.Path(path).is_file():
         raise RuntimeError( "File %s not found." % path )
         
-    archive = os.path.join(tempfile.mkdtemp(), 'data.tar.bz2')
+    archive = pathlib.Path(tempfile.mkdtemp()) / 'data.tar.bz2'
 
     # This mode (w|bz2) is suitable for streaming. The blocksize is default to
     # 20*512 bytes. We change this to 2048
     with tarfile.open(archive, 'w|bz2', bufsize=2048 ) as h:
-        if os.path.isfile(path):
-            h.add(path, os.path.basename(path))
+        p = pathlib.Path(path)
+        if p.is_file():
+            h.add(path, p.name)
         else:
             h.add(path)
         # add other files.
         for f in args['other_files'].split(';'):
-            h.add(f, os.path.basename(f)) if f  else None
+            h.add(f, pathlib.Path(f).name) if f else None
 
     with open(archive, 'rb') as f:
         data = f.read()
@@ -89,16 +91,17 @@ def save_bz2(conn, outfile):
 def main( args ):
     sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     try:
-        host, port = args['server'].split(':')
+        host, port = args['server'].rsplit(':', 1)
         sock.connect( (host, int(port)) )
+        log('[INFO] Connected with %s:%s'%(host,port))
     except Exception as e:
         print( "[ERROR] Failed to connect to %s. Error %s "%(args['server'],e))
         return None
 
     sock.settimeout(1)
-    data = None
+    data = b''
     try:
-        data = gen_payload( args )
+        data += gen_payload( args )
     except Exception as e:
         log( "[ERROR] Failed to generate payload. Error: %s"%e)
         return None
@@ -107,18 +110,21 @@ def main( args ):
     log( "[INFO ] Total data sent : %d bytes " % len(data) )
 
     # This is response from the server.
+    tableData = b''
     while True:
         d = b''
         try:
             d = read_msg( sock )
-        except socket.timeout as e:
+            tableData += d
+        except socket.timeout:
             time.sleep(0.1)
 
         if len(d) > 0:
-            print('%s' % str(d))
+            decoded, tableData = su.decode_data(tableData)
+            print(decoded, len(tableData), chr(tableData[0]))
         if b'>DONE SIMULATION' in d:
             break
-
+    
     outfile = os.path.join(tempfile.mkdtemp(), 'res.tar.bz2')
     data = save_bz2(sock, outfile)
     return data, outfile

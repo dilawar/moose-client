@@ -8,104 +8,68 @@ __maintainer__       = "Dilawar Singh"
 __email__            = "dilawars@ncbs.res.in"
 __status__           = "Development"
 
-import sys
-import os
-import re
-import socket
-import PIL.ImageTk 
-import PIL.Image
+import pathlib
 import client
 import tarfile
-import glob
 import helper
-import time
-import screeninfo
-
-if sys.version_info[0] >= 3:  
-    import tkinter as TK
-else:
-    import Tkinter as TK
-
-if sys.version_info[0] >= 3:  
-    import PySimpleGUI as sg  
-else:  
-    import PySimpleGUI27 as sg  
-
-sdir_ = os.path.dirname( __file__ )
-
-# set resolution.
-try:
-    from screeninfo import get_monitors
-    m = get_monitors()[0]
-    w_, h_ = int(m.width//1.2), int(m.height//1.5)
-except Exception as e:
-    w_, h_ = 1200, 900
-
-# need a global because we don't want img_ to be garbage collected.
-img_   = None
-
-layout = [ 
-        [sg.Text('Server Adress', size=(15,1))
-            , sg.InputText('ghevar.ncbs.res.in:31417', key='server')]
-        , [sg.Text('Main file'), sg.Input(key='main_file'), sg.FileBrowse()
-            , sg.Checkbox('Upload directory?', key='upload_directory')
-            ]
-        , [sg.Text('Other files'), sg.Input(key='other_files'), sg.FilesBrowse()]
-        , [sg.Canvas(size=(w_,h_), key='canvas')]
-        # Output size is in chars x line 
-        #, [sg.Output(key='output', size=(120,8))]
-        , [sg.Submit(), sg.Exit()]
-        ]
-
-def draw_canvas(canvas, imgs):
-    global img_
-    global w_, h_
-    if not isinstance(imgs, list):
-        imgs = [ imgs ]
-    for img in imgs:
-        img_ = PIL.ImageTk.PhotoImage(img.resize((w_,h_)))
-        canvas.TKCanvas.create_image(0, 0, anchor=TK.NW ,image=img_)
-        time.sleep(1)
+import layout
+import multiprocessing as mp
 
 def display_results(bzfile, window):
     helper.log( "Displaying results saved in %s" % bzfile )
-    cwd = os.path.dirname(bzfile)
+    cwd = pathlib.Path(bzfile).parent
     with tarfile.open(bzfile, 'r') as f:
         f.extractall(path=cwd)
     images = helper.find_images_pil(cwd)
     if len(images) > 0:
-        draw_canvas(window.FindElement('canvas'), images)
+        layout.draw_canvas(window.FindElement('results'), images)
     else:
         helper.log( "No images were returned by the server." )
-        
+
+def client_process(values, done, q, lock):
+    if not lock.acquire(timeout=1):
+        helper.log("Other process is running.")
+        q.put(None)
+        done.value == 1
+        return 
+    res = client.submit_job(values)
+    q.put(res)
+    done.value = 1
+    lock.release()
+    print( 'Complete.' )
+    return
 
 def main(args):
-    global sdir_
-    global h_, w_
-    window = sg.Window('MOOSE').Layout(layout).Finalize()
+    window = layout.mainWindow 
 
     if args['server']:
         window.FindElement('server').Update(args['server'])
     if args['input']:
         window.FindElement('main_file').Update(args['input'])
 
-    draw_canvas( window.FindElement('canvas' )
-            , PIL.Image.open(os.path.join(sdir_, './assests/moose_icon_large.png'))
-            )
+    # Prepare for multiprocessing. Only One request can be served at a time.
+    lock = mp.Lock()
+    res = mp.Queue()
+    clientDone = mp.Value('d', 0)
 
     while True:
         event, values = window.Read()  
         print(event, values)
         if event is None or event == 'Exit':  
+            lock.release()
             break  
         if event == 'Submit':  
-            response = client.submit_job(values)
-            if response is None:
-                helper.log( "[INFO ] Failed to recieve any data." )
-            else:
-                data, bzfile = response
-                helper.log( "All done. Recieved %s bytes of data." % len(data) )
-                display_results( bzfile, window )
+            p = mp.Process(target=client_process, args=(values, clientDone, res, lock))
+            p.start()
+            if clientDone.value == 1:
+                clientDone.value = 0
+                response = res.get()
+                if response is None:
+                    helper.log( "[INFO ] Failed to recieve any data." )
+                else:
+                    data, bzfile = response
+                    helper.log( "All done. Recieved %s bytes of data." % len(data) )
+                    display_results( bzfile, window )
         else:
             helper.log( 'Unsupported event' )
 
