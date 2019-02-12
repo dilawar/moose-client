@@ -11,7 +11,6 @@ __status__           = "Development"
 import os
 import pathlib
 import socket
-import time
 import math
 import tarfile
 import tempfile
@@ -72,17 +71,16 @@ def read_msg(conn):
     nBytes = get_n_bytes(conn, prefixL_)
     nBytes = int(nBytes)
     data = get_n_bytes(conn, nBytes)
-    return data 
+    # prefix is <ABC> followed by data'
+    assert data[0] == ord(b'<'), (data[0], data[:10])
+    assert data[4] == ord(b'>'), (data[4], data[:10])
+    return data[1:4], data[5:] 
 
 def save_bz2(conn, outfile):
     # first 9 bytes always tell how much to read next. Make sure the submit job
     # script has it
-    d = get_n_bytes(conn, prefixL_)
-    if len(d) < prefixL_:
-        print( "[ERROR] Format. First %s bytes are size of msg."%prefixL_)
-        return 
-    d = int(d)
-    data = get_n_bytes(conn, d)
+    prefix, data = read_msg(conn)
+    assert prefix == b'TAR', 'Invalid prefix for TAR data'
     with open(outfile, 'wb') as f:
         f.write(data)
     print( "[INFO ] Got total %d bytes." % len(data) )
@@ -98,7 +96,7 @@ def main( args ):
         print( "[ERROR] Failed to connect to %s. Error %s "%(args['server'],e))
         return None
 
-    sock.settimeout(1)
+    sock.settimeout(10)
     data = b''
     try:
         data += gen_payload( args )
@@ -114,15 +112,17 @@ def main( args ):
     while True:
         d = b''
         try:
-            d = read_msg( sock )
-            tableData += d
+            prefix, d = read_msg(sock)
         except socket.timeout:
-            time.sleep(0.1)
+            continue
 
-        if len(d) > 0:
+        if prefix == b'TAB':
+            log("[INFO] Time to stream table data.")
+            tableData += d
             decoded, tableData = su.decode_data(tableData)
             print(decoded, len(tableData), chr(tableData[0]))
-        if b'>DONE SIMULATION' in d:
+        elif prefix == 'EOS':
+            log("[INFO] End of simulation.")
             break
     
     outfile = os.path.join(tempfile.mkdtemp(), 'res.tar.bz2')
