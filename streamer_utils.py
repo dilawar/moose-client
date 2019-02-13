@@ -10,10 +10,7 @@ __email__            = "dilawars@ncbs.res.in"
 __status__           = "Development"
 
 import sys
-import os
 import numpy as np
-import math
-import struct
 from collections import defaultdict
 
 def bytes_to_np_arr(data):
@@ -26,28 +23,46 @@ def np_array_to_data(arr):
     # Make sure that first char of arr is 'H'
     n = 0
     res = defaultdict(list)
+    leftOver = b''
     while n < len(arr):
         assert chr(int(arr[n])) == 'H', 'Expected H, Got %s'%arr[n]
-        hSize = int(arr[n+1])
         n += 1
+        if n >= len(arr):
+            return {}, arr.tobytes()
+        hSize = int(arr[n])
         colName = np_array_to_string(arr[n+1:n+1+hSize])
         n += hSize + 1
+        if n >= len(arr):
+            return {}, arr.tobytes()
         assert chr(int(arr[n])) == 'V', 'Expected V'
         n += 1
+        if n >= len(arr):
+            return {}, arr.tobytes()
         dataSize = int(arr[n])
         n += 1
+        if n >= len(arr) or n+dataSize >= len(arr): 
+            return {}, arr.tobytes()
         res[colName].append(arr[n:n+dataSize])
         n += dataSize 
-    return { k : np.concatenate(v) for k, v in res.items() }
+        leftOver += arr[n:].tobytes()
+    return {k:np.concatenate(v) for k, v in res.items()}, leftOver
 
 def decode_data(data):
+    properSizeToDecode = 8*int(len(data)//8)
+    data = data[:properSizeToDecode]
+    leftOver = data[properSizeToDecode:]
+    #  print( "[INFO ] Len of data %d bytes. %dx8 bytes" %(len(data), len(data)//8))
     try:
         arr = bytes_to_np_arr(data)
-    except Exception:
-        return {}, data
+    except Exception as e:
+        print("[WARN ] Error in decoding %s"%e)
+        return {}, data+leftOver
+
     if not int(arr[0]) == ord('H'):
-        return {}, data
-    return np_array_to_data(arr), b''
+        print( "[WARN ] Not a valid stream. Missing header info." )
+        return {}, data+leftOver
+    res, rest = np_array_to_data(arr)
+    return res, rest+leftOver
 
 def test():
     with open(sys.argv[1], 'rb') as f:
